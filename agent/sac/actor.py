@@ -65,6 +65,7 @@ class DiagGaussianActor(nn.Module):
   def __init__(self, obs_dim, action_dim, hidden_dim, hidden_depth,
                 log_std_bounds):
     super().__init__()
+    # print("obs_dim: ",obs_dim)
 
     self.log_std_bounds = log_std_bounds
     self.trunk = util.mlp(obs_dim, hidden_dim, 2 * action_dim,

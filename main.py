@@ -9,6 +9,9 @@ from tensorboardX import SummaryWriter
 from utils import util, buffer
 from agent.sac import sac_agent
 from agent.vlsac import vlsac_agent
+from agent.rfsac import rfsac_agent
+
+from our_env.noisy_pend import noisyPendulumEnv
 
 
 if __name__ == "__main__":
@@ -16,7 +19,7 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("--dir", default=0, type=int)                     
   parser.add_argument("--alg", default="sac")                     # Alg name (sac, vlsac)
-  parser.add_argument("--env", default="HalfCheetah-v3")          # Environment name
+  parser.add_argument("--env", default="Pendulum-v1")          # Environment name
   parser.add_argument("--seed", default=0, type=int)              # Sets Gym, PyTorch and Numpy seeds
   parser.add_argument("--start_timesteps", default=25e3, type=float)# Time steps initial random policy is used
   parser.add_argument("--eval_freq", default=5e3, type=int)       # How often (time steps) we evaluate
@@ -30,13 +33,20 @@ if __name__ == "__main__":
   parser.add_argument("--learn_bonus", action="store_true")        # Save model and optimizer parameters
   parser.add_argument("--save_model", action="store_true")        # Save model and optimizer parameters
   parser.add_argument("--extra_feature_steps", default=3, type=int)
+  parser.add_argument("--sigma", default = 0.,type = float) #noise for noisy environment
   args = parser.parse_args()
+
+  sigma = args.sigma
 
   env = gym.make(args.env)
   eval_env = gym.make(args.env)
+  max_length = env._max_episode_steps
+  if args.env == "Pendulum-v1":
+    env = noisyPendulumEnv(sigma =  sigma)
+    eval_env = noisyPendulumEnv(sigma = sigma)
   env.seed(args.seed)
   eval_env.seed(args.seed)
-  max_length = env._max_episode_steps
+  
 
   # setup log 
   log_path = f'log/{args.env}/{args.alg}/{args.dir}/{args.seed}'
@@ -46,7 +56,11 @@ if __name__ == "__main__":
   torch.manual_seed(args.seed)
   np.random.seed(args.seed)
 
-  # 
+  # # 
+  # if args.env == "Pendulum-v1": #hard-code for now
+  #   state_dim = 2
+  #   # print("I am here!")
+  # else:
   state_dim = env.observation_space.shape[0]
   action_dim = env.action_space.shape[0] 
   max_action = float(env.action_space.high[0])
@@ -67,6 +81,8 @@ if __name__ == "__main__":
     kwargs['extra_feature_steps'] = args.extra_feature_steps
     kwargs['feature_dim'] = args.feature_dim
     agent = vlsac_agent.VLSACAgent(**kwargs)
+  elif args.alg == 'rfsac':
+    agent = rfsac_agent.RFSACAgent(**kwargs)
   
   replay_buffer = buffer.ReplayBuffer(state_dim, action_dim)
 
@@ -91,6 +107,7 @@ if __name__ == "__main__":
 
     # Perform action
     next_state, reward, done, _ = env.step(action) 
+    # print("next state", next_state)
     done_bool = float(done) if episode_timesteps < max_length else 0
 
     # Store data in replay buffer
