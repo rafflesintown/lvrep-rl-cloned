@@ -95,6 +95,7 @@ if __name__ == "__main__":
   episode_num = 0
   timer = util.Timer()
 
+
   for t in range(int(args.max_timesteps)):
     
     episode_timesteps += 1
@@ -105,15 +106,32 @@ if __name__ == "__main__":
     else:
       action = agent.select_action(state, explore=True)
 
+
+
     # Perform action
     next_state, reward, done, _ = env.step(action) 
     # print("next state", next_state)
     done_bool = float(done) if episode_timesteps < max_length else 0
 
-    # Store data in replay buffer
-    replay_buffer.add(state, action, next_state, reward, done_bool)
+    # if episode_timesteps >= 2: #start adding to buffer once 2 state action pairs seen
+    # # Store data in replay buffer
+    #   replay_buffer.add(prev_state, prev_action, prev_reward, state, action,reward,next_state, done_bool)
+    #   print("prev state", prev_state)
+    #   print("prev action", prev_action)
+    #   print("state", state)
+    #   print("action",action)
+    #   print("next state", next_state)
+    #   print("prev_reward", prev_reward)
+    #   print("reward", reward)
 
+    replay_buffer.add(state,action,next_state,reward,done)
+
+    prev_state = np.copy(state)
+    # # print("I am prev state", prev_state)
+    # prev_action = np.copy(action)
+    # prev_reward = np.copy(reward)
     state = next_state
+    # print(" I am state", state)
     episode_reward += reward
     
     # Train agent after collecting sufficient data
@@ -125,6 +143,7 @@ if __name__ == "__main__":
       print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
       # Reset environment
       state, done = env.reset(), False
+      # prev_state = np.copy(state)
       episode_reward = 0
       episode_timesteps = 0
       episode_num += 1 

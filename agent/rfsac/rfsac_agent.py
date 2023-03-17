@@ -7,6 +7,7 @@ import os
 
 import torch.nn.init as init
 import numpy as np
+from utils import util 
 
 # from utils.util import unpack_batch, RunningMeanStd
 from utils.util import unpack_batch
@@ -113,33 +114,134 @@ class RLNetwork(nn.Module):
 
 
 
+
+
 #currently hardcoding sa_dim
-class RFCritic(RLNetwork):
-    def __init__(self, sa_dim = 4, n_neurons = 128):
+#this is a  Q function
+class RFQCritic(RLNetwork):
+    def __init__(self, sa_dim = 4, embedding_dim = 32, n_neurons = 512):
         super().__init__()
         self.n_layers = 1
         self.n_neurons = n_neurons
 
-        fourier_feats = nn.Linear(sa_dim, n_neurons)
+        self.embed = nn.Linear(sa_dim, embedding_dim)
+
+        # fourier_feats1 = nn.Linear(sa_dim, n_neurons)
+        fourier_feats1 = nn.Linear(embedding_dim,n_neurons)
+        init.normal_(fourier_feats1.weight)
+        init.uniform_(fourier_feats1.bias, 0,2*np.pi)
+        # init.zeros_(fourier_feats.bias)
+        fourier_feats1.weight.requires_grad = False
+        fourier_feats1.bias.requires_grad = False
+        self.fourier1 = fourier_feats1 #unnormalized, no cosine/sine yet
+
+
+
+        # fourier_feats2 = nn.Linear(sa_dim, n_neurons)
+        fourier_feats2 = nn.Linear(embedding_dim,n_neurons)
+        init.normal_(fourier_feats2.weight)
+        init.uniform_(fourier_feats2.bias, 0,2*np.pi)
+        fourier_feats2.weight.requires_grad = False
+        fourier_feats2.bias.requires_grad = False
+        self.fourier2 = fourier_feats2
+
+        layer1 = nn.Linear( n_neurons, 1) #try default scaling
+        # init.uniform_(layer1.weight, -3e-3,3e-3) #weight is the only thing we update
+        init.zeros_(layer1.bias)
+        layer1.bias.requires_grad = False #weight is the only thing we update
+        self.output1 = layer1
+
+
+        layer2 = nn.Linear( n_neurons, 1) #try default scaling
+        # init.uniform_(layer2.weight, -3e-3,3e-3) 
+        # init.uniform_(layer2.weight, -3e-4,3e-4)
+        init.zeros_(layer2.bias)
+        layer2.bias.requires_grad = False #weight is the only thing we update
+        self.output2= layer2
+
+
+    def forward(self, states: torch.Tensor, actions: torch.Tensor):
+        x = torch.cat([states,actions],axis = -1)
+        # x = F.batch_norm(x) #perform batch normalization (or is dbn better?)
+        # x = (x - torch.mean(x, dim=0))/torch.std(x, dim=0) #normalization
+        # x = self.bn(x)
+        x = self.embed(x) #use an embedding layer
+        x = F.relu(x)
+        x1 = self.fourier1(x)
+        x2 = self.fourier2(x)
+        x1 = torch.cos(x1)
+        x2 = torch.cos(x2)
+        # x1 = torch.cos(x)
+        # x2 = torch.sin(x)
+        # x = torch.cat([x1,x2],axis = -1)
+        # x = torch.div(x,1./np.sqrt(2 * self.n_neurons))
+        x1 = torch.div(x1,1./np.sqrt(self.n_neurons))
+        x2 = torch.div(x2,1./np.sqrt(self.n_neurons))
+        # x1 = torch.div(x1,1./self.n_neurons)
+        # x2 = torch.div(x2,1./self.n_neurons)
+        # x = torch.relu(x)
+        return self.output1(x1), self.output2(x2)
+
+    def get_norm(self):
+    	l1_norm = torch.norm(self.output1)
+    	l2_norm = torch.norm(self.output2)
+    	return (l1_norm, l2_norm)
+
+#currently hardcoding s_dim
+#really this is a V function rather than  Q function
+class RFCritic(RLNetwork):
+    def __init__(self, s_dim = 3, n_neurons = 256):
+        super().__init__()
+        self.n_layers = 1
+        self.n_neurons = n_neurons
+
+        fourier_feats = nn.Linear(s_dim, n_neurons)
         init.normal_(fourier_feats.weight)
-        init.uniform_(fourier_feats.bias, 0,2*np.pi)
+        # init.uniform_(fourier_feats.bias, 0,2*np.pi)
+        init.zeros_(fourier_feats.bias)
         fourier_feats.weight.requires_grad = False
         fourier_feats.bias.requires_grad = False
-        self.fourier = fourier_feats #unnormalized, no cosine yet
+        self.fourier = fourier_feats #unnormalized, no cosine/sine yet
 
-        layer = nn.Linear(n_neurons, 1)
+        layer = nn.Linear( 2 * n_neurons, 1)
         init.uniform_(layer.weight, -3e-3,3e-3) #weight is the only thing we update
         init.zeros_(layer.bias)
         layer.bias.requires_grad = False
         self.output = layer
-    def forward(self, states: torch.Tensor, actions: torch.Tensor):
-        x = torch.cat([states,actions],axis = -1)
+    def forward(self, states: torch.Tensor):
+        x = states
         x = self.fourier(x)
-        x = torch.cos(x)
-        x = torch.div(x,1./self.n_neurons)
+        x1 = torch.cos(x)
+        x2 = torch.sin(x)
+        x = torch.cat([x1,x2],axis = -1)
+        x = torch.div(x,1./np.sqrt(2 * self.n_neurons))
+        # x = torch.div(x,1./self.n_neurons)
         # x = torch.relu(x)
         return self.output(x)
 
+
+class DoubleQCritic(nn.Module):
+  """Critic network, employes double Q-learning."""
+  def __init__(self, obs_dim, action_dim, hidden_dim, hidden_depth):
+    super().__init__()
+
+    self.Q1 = util.mlp(obs_dim + action_dim, hidden_dim, 1, hidden_depth)
+    self.Q2 = util.mlp(obs_dim + action_dim, hidden_dim, 1, hidden_depth)
+
+    self.outputs = dict()
+    self.apply(util.weight_init)
+
+  def forward(self, obs, action):
+    assert obs.size(0) == action.size(0)
+
+    obs_action = torch.cat([obs, action], dim=-1)
+    q1 = self.Q1(obs_action)
+    q2 = self.Q2(obs_action)
+
+    self.outputs['q1'] = q1
+    self.outputs['q2'] = q2
+
+    return q1, q2
 
 
 class RFSACAgent(SACAgent):
@@ -151,7 +253,8 @@ class RFSACAgent(SACAgent):
 			state_dim, 
 			action_dim, 
 			action_space, 
-			lr=1e-4,
+			# lr=1e-3,
+			lr = 5e-4,
 			discount=0.99, 
 			target_update_period=2,
 			tau=0.005,
@@ -195,10 +298,29 @@ class RFSACAgent(SACAgent):
 		# 	list(self.encoder.parameters()) + list(self.decoder.parameters()) + list(self.f.parameters()),
 		# 	lr=lr)
 
-		self.critic = RFCritic().to(device)
+		# self.critic = RFCritic().to(device)
+		# self.rfQcritic = RFQCritic().to(device)
+		# self.rfQcritic_target = copy.deepcopy(self.rfQcritic)
+		# self.critic_target = copy.deepcopy(self.critic)
+		# self.critic_optimizer = torch.optim.Adam(
+		# 	self.critic.parameters(), lr=lr, betas=[0.9, 0.999])
+		# self.rfQcritic_optimizer = torch.optim.Adam(
+		# 	self.rfQcritic.parameters(), lr=lr, betas=[0.9, 0.999])
+
+		# self.critic = DoubleQCritic(
+		# 	obs_dim = state_dim,
+		# 	action_dim = action_dim,
+		# 	hidden_dim = hidden_dim,
+		# 	hidden_depth = 2,
+		# 	).to(device)
+		self.critic = RFQCritic().to(device)
+		# self.critic = Critic().to(device)
 		self.critic_target = copy.deepcopy(self.critic)
 		self.critic_optimizer = torch.optim.Adam(
 			self.critic.parameters(), lr=lr, betas=[0.9, 0.999])
+
+
+
 
 
 	# def feature_step(self, batch):
@@ -244,6 +366,7 @@ class RFSACAgent(SACAgent):
 		"""
 		Actor update step
 		"""
+		# dist = self.actor(batch.state, batch.next_state)
 		dist = self.actor(batch.state)
 		action = dist.rsample()
 		log_prob = dist.log_prob(action).sum(-1, keepdim=True)
@@ -254,7 +377,12 @@ class RFSACAgent(SACAgent):
 		# 	mean, log_std = self.f(batch.state, action)
 		# q1, q2 = self.critic(mean, log_std)
 		# q = torch.min(q1, q2)
-		q = self.critic(batch.state,action)
+		# q = self.discount * self.critic(batch.next_state) + batch.reward 
+		# q = batch.reward 
+		# q1,q2 = self.rfQcritic(batch.state,batch.action)
+		q1,q2 = self.critic(batch.state,action) #not batch.action!!!
+		q = torch.min(q1, q2)
+		# q = q1 #try not using q1, q1
 
 		actor_loss = ((self.alpha) * log_prob - q).mean()
 
@@ -281,8 +409,9 @@ class RFSACAgent(SACAgent):
 		"""
 		Critic update step
 		"""			
-		state, action, next_state, reward, done = unpack_batch(batch)
-
+		# state, action, reward, next_state, next_action, next_reward,next_next_state, done = unpack_batch(batch)
+		state,action,next_state,reward,done = unpack_batch(batch)
+		
 		with torch.no_grad():
 			dist = self.actor(next_state)
 			next_action = dist.rsample()
@@ -296,27 +425,38 @@ class RFSACAgent(SACAgent):
 			# 	next_mean, next_log_std = self.f(next_state, next_action)
 
 			# next_q1, next_q2 = self.critic_target(next_mean, next_log_std)
-			next_q = self.critic_target(next_state,next_action) - self.alpha * next_action_log_pi
-			# next_q = torch.min(next_q1, next_q2) - self.alpha * next_action_log_pi
+			# next_q = self.critic_target(next_next_state) - self.alpha * next_action_log_pi #don't use  critic target
+			# next_q1, next_q2 = self.rfQcritic_target(next_state,next_action) 
+			next_q1, next_q2 = self.critic_target(next_state,next_action)
+			next_q = torch.min(next_q1,next_q2)-  self.alpha * next_action_log_pi
 			target_q = reward + (1. - done) * self.discount * next_q 
+			# next_q = torch.min(next_q1, next_q2) - self.alpha * next_action_log_pi
+			# target_q = next_reward + (1. - done) * self.discount * next_q 
 			
 		# q1, q2 = self.critic(mean, log_std)
-
-		# q1_loss = F.mse_loss(target_q, q1)
-		# q2_loss = F.mse_loss(target_q, q2)
-		# q_loss = q1_loss + q2_loss
-		q = self.critic(state,action)
-		q_loss = F.mse_loss(target_q,q)
+		# q1,q2 = self.rfQcritic(state,action)
+		q1,q2 = self.critic(state,action)
+		q1_loss = F.mse_loss(target_q, q1)
+		q2_loss = F.mse_loss(target_q, q2)
+		q_loss = q1_loss + q2_loss
+		# q = self.critic(next_state)
+		# q = self.rfQcritic(state,action)
+		# q_loss = F.mse_loss(target_q,q)
+		# q1,q2 = self.rfQcritic(state,action)
+		# q = torch.min(q1,q2)
+		# q_loss = F.mse_loss(target_q,q)
 
 		self.critic_optimizer.zero_grad()
+		# self.rfQcritic_optimizer.zero_grad()
 		q_loss.backward()
 		self.critic_optimizer.step()
+		# self.rfQcritic_optimizer.step()
 
 		return {
-			'q_loss': q_loss.item(), 
-			# 'q2_loss': q2_loss.item(),
-			'q': q.mean().item(),
-			# 'q2': q2.mean().item()
+			'q1_loss': q1_loss.item(), 
+			'q2_loss': q2_loss.item(),
+			'q1': q1.mean().item(),
+			'q2': q2.mean().item()
 			}
 
 
@@ -344,6 +484,7 @@ class RFSACAgent(SACAgent):
 
 		# Acritic step
 		critic_info = self.critic_step(batch)
+		# critic_info = self.rfQcritic_step(batch)
 
 		# Actor and alpha step
 		actor_info = self.update_actor_and_alpha(batch)

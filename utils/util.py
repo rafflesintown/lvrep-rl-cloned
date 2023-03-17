@@ -7,6 +7,10 @@ from torch import nn
 from torch.nn import functional as F
 
 
+def unpack_batchv2(batch):
+  return batch.state, batch.action, batch.reward, batch.next_state, batch.next_action,batch.next_reward,batch.next_next_state,batch.done
+
+
 def unpack_batch(batch):
   return batch.state, batch.action, batch.next_state, batch.reward, batch.done
 
