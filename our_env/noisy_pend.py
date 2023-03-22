@@ -148,7 +148,7 @@ class noisyPendulumEnv(gym.Env):
             self.render()
         return self._get_obs(), -costs, done, {}
 
-    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
+    def reset(self, *, init_state = None, seed: Optional[int] = None, options: Optional[dict] = None):
         super().reset(seed=seed)
         if options is None:
             high = np.array([DEFAULT_X, DEFAULT_Y])
@@ -161,7 +161,11 @@ class noisyPendulumEnv(gym.Env):
             y = utils.verify_number_and_cast(y)
             high = np.array([x, y])
         low = -high  # We enforce symmetric limits.
-        self.state = self.np_random.uniform(low=low, high=high)
+
+        if init_state is None:
+            self.state = self.np_random.uniform(low=low, high=high)
+        else:
+            self.state = init_state
         self.last_u = None
 
         self.counter = 0

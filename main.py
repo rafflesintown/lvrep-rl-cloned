@@ -34,6 +34,7 @@ if __name__ == "__main__":
   parser.add_argument("--save_model", action="store_true")        # Save model and optimizer parameters
   parser.add_argument("--extra_feature_steps", default=3, type=int)
   parser.add_argument("--sigma", default = 0.,type = float) #noise for noisy environment
+  parser.add_argument("--embedding_dim", default = -1,type =int) #if -1, do not add embedding layer
   args = parser.parse_args()
 
   sigma = args.sigma
@@ -49,8 +50,8 @@ if __name__ == "__main__":
   
 
   # setup log 
-  log_path = f'log/{args.env}/{args.alg}/{args.dir}/{args.seed}'
-  summary_writer = SummaryWriter(log_path)
+  log_path = f'log/{args.env}/{args.alg}/{args.dir}/{args.seed}/T={args.max_timesteps}'
+  summary_writer = SummaryWriter(log_path+"/summary_files")
 
   # set seeds
   torch.manual_seed(args.seed)
@@ -72,6 +73,7 @@ if __name__ == "__main__":
     "discount": args.discount,
     "tau": args.tau,
     "hidden_dim": args.hidden_dim,
+    "sigma": sigma,
   }
 
   # Initialize policy
@@ -95,6 +97,10 @@ if __name__ == "__main__":
   episode_num = 0
   timer = util.Timer()
 
+  #keep track of best eval model's state dict
+  best_eval_reward = -1e6
+  best_actor = None
+  best_critic = None
 
   for t in range(int(args.max_timesteps)):
     
@@ -162,6 +168,22 @@ if __name__ == "__main__":
 
       print('Step {}. Steps per sec: {:.4g}.'.format(t+1, steps_per_sec))
 
+      if evaluation > best_eval_reward:
+        best_actor = agent.actor.state_dict()
+        best_critic = agent.critic.state_dict()
+
+        # print("actor's state dict")
+        # for param_tensor in agent.actor.state_dict():
+        #   print(param_tensor, "\t", agent.actor.state_dict()[param_tensor].size())
+
+        # print("critic's state dict")
+        # for param_tensor in agent.critic.state_dict():
+        #   print(param_tensor,"\t", agent.critic.state_dict()[param_tensor].size())
+
   summary_writer.close()
 
   print('Total time cost {:.4g}s.'.format(timer.time_cost()))
+
+  #save best actor/best critic
+  torch.save(best_actor, log_path+"/actor.pth")
+  torch.save(best_critic, log_path+"/critic.pth")
