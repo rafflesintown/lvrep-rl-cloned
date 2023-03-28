@@ -35,6 +35,8 @@ if __name__ == "__main__":
   parser.add_argument("--extra_feature_steps", default=3, type=int)
   parser.add_argument("--sigma", default = 0.,type = float) #noise for noisy environment
   parser.add_argument("--embedding_dim", default = -1,type =int) #if -1, do not add embedding layer
+  parser.add_argument("--rand_feat_num", default = 256, type = int)
+  parser.add_argument("--learn_rf", default = "False") #make this a string (strange Python issue...) 
   args = parser.parse_args()
 
   sigma = args.sigma
@@ -47,10 +49,10 @@ if __name__ == "__main__":
     eval_env = noisyPendulumEnv(sigma = sigma)
   env.seed(args.seed)
   eval_env.seed(args.seed)
-  
+
 
   # setup log 
-  log_path = f'log/{args.env}/{args.alg}/{args.dir}/{args.seed}/T={args.max_timesteps}'
+  log_path = f'log/{args.env}/{args.alg}/{args.dir}/{args.seed}/T={args.max_timesteps}/rf_num={args.rand_feat_num}/learn_rf={args.learn_rf}/sigma={args.sigma}'
   summary_writer = SummaryWriter(log_path+"/summary_files")
 
   # set seeds
@@ -63,8 +65,17 @@ if __name__ == "__main__":
   #   # print("I am here!")
   # else:
   state_dim = env.observation_space.shape[0]
+  # if args.env == "Pendulum-v1": #testing 2-dim state
+  #   state_dim = 2
   action_dim = env.action_space.shape[0] 
   max_action = float(env.action_space.high[0])
+
+  if args.learn_rf == "False":
+    learn_rf = False
+  else:
+    learn_rf = True
+
+  print("learn rf", learn_rf)
 
   kwargs = {
     "state_dim": state_dim,
@@ -74,6 +85,9 @@ if __name__ == "__main__":
     "tau": args.tau,
     "hidden_dim": args.hidden_dim,
     "sigma": sigma,
+    "rand_feat_num": args.rand_feat_num,
+    "learn_rf": learn_rf,
+    "seed": args.seed
   }
 
   # Initialize policy
@@ -149,6 +163,7 @@ if __name__ == "__main__":
       print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
       # Reset environment
       state, done = env.reset(), False
+      print("state after reset", state)
       # prev_state = np.copy(state)
       episode_reward = 0
       episode_timesteps = 0
@@ -186,4 +201,4 @@ if __name__ == "__main__":
 
   #save best actor/best critic
   torch.save(best_actor, log_path+"/actor.pth")
-  torch.save(best_critic, log_path+"/critic.pth")
+  torch.save(best_critic, log_path+ "/critic.pth")

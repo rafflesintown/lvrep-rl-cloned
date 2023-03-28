@@ -4,6 +4,7 @@ from os import path
 from typing import Optional
 
 import numpy as np
+import time
 
 import gym
 from gym import spaces
@@ -110,6 +111,7 @@ class noisyPendulumEnv(gym.Env):
         self.isopen = True
 
         high = np.array([1.0, 1.0, self.max_speed], dtype=np.float32)
+        # high = np.array([100.,100.,self.max_speed], dtype = np.float32)
         # This will throw a warning in tests/envs/test_envs in utils/env_checker.py as the space is not symmetric
         #   or normalised as max_torque == 2 by default. Ignoring the issue here as the default settings are too old
         #   to update to follow the openai gym api
@@ -129,6 +131,7 @@ class noisyPendulumEnv(gym.Env):
         u = np.clip(u, -self.max_torque, self.max_torque)[0]
         self.last_u = u  # for rendering
         costs = angle_normalize(th) ** 2 + 0.1 * thdot**2 + 0.001 * (u**2)
+        # costs = th**2 + 0.1 *
 
         newthdot = thdot + (3 * g / (2 * l) * np.sin(th) + 3.0 / (m * l**2) * u) * dt
         newthdot = np.clip(newthdot, -self.max_speed, self.max_speed)
@@ -143,6 +146,9 @@ class noisyPendulumEnv(gym.Env):
             done = True
         else:
             done = False
+
+        # print("normalized state", angle_normalize(self.state))
+        # print("cost", costs)
 
         if self.render_mode == "human":
             self.render()
@@ -176,6 +182,7 @@ class noisyPendulumEnv(gym.Env):
 
     def _get_obs(self):
         theta, thetadot = self.state
+        # return self.state #testing returning state for now
         return np.array([np.cos(theta), np.sin(theta), thetadot], dtype=np.float32)
 
     def render(self):
@@ -273,6 +280,29 @@ class noisyPendulumEnv(gym.Env):
             return np.transpose(
                 np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
             )
+
+    def visualize(self, init_state, cmd, dt: float =None):
+        """
+        Visualize the movement associated to a sequence of control variables
+        :param cmd: sequence of controls to be applied on the system given as an numpy array
+        :param dt: time step to visualize the movement (default is to use the time step defined in the environment)
+        """
+        if dt is None:
+            dt = self.dt
+        self.render_mode = "human"
+        self.reset(init_state = init_state)
+        print("self.state", self.state)
+        t = 0
+        for ctrl in cmd:
+            ctrl = np.array([ctrl])
+            self.render()
+            time.sleep(dt)
+            self.step(ctrl)
+            print("self.state (time %d)"%t, self.state)
+            t += 1
+        self.render()
+        self.close()
+
 
     def close(self):
         if self.screen is not None:

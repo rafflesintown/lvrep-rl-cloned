@@ -28,6 +28,7 @@ class SACAgent(object):
 			alpha=0.1,
 			auto_entropy_tuning=True,
 			hidden_dim=1024,
+			seed = 0
 			):
 
 		self.steps = 0
@@ -62,6 +63,7 @@ class SACAgent(object):
 			hidden_dim=hidden_dim,
 			hidden_depth=2,
 			log_std_bounds=[-5., 2.], 
+			seed = seed
 		).to(self.device)
 		self.log_alpha = torch.tensor(np.log(alpha)).to(self.device)
 		self.log_alpha.requires_grad = True
