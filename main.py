@@ -35,22 +35,26 @@ if __name__ == "__main__":
   parser.add_argument("--extra_feature_steps", default=3, type=int)
   parser.add_argument("--sigma", default = 0.,type = float) #noise for noisy environment
   parser.add_argument("--embedding_dim", default = -1,type =int) #if -1, do not add embedding layer
+  parser.add_argument("--rf_num", default = 256, type = int)
+  parser.add_argument("--learn_rf", default = "False") #make this a string (strange Python issue...) 
+  parser.add_argument("--euler", default = "False") #True if euler discretization to be used; otherwise use default OpenAI gym discretization
   args = parser.parse_args()
 
   sigma = args.sigma
+  euler = True if args.euler == "True" else False
 
   env = gym.make(args.env)
   eval_env = gym.make(args.env)
   max_length = env._max_episode_steps
   if args.env == "Pendulum-v1":
-    env = noisyPendulumEnv(sigma =  sigma)
-    eval_env = noisyPendulumEnv(sigma = sigma)
+    env = noisyPendulumEnv(sigma =  sigma, euler = euler)
+    eval_env = noisyPendulumEnv(sigma = sigma, euler = euler)
   env.seed(args.seed)
   eval_env.seed(args.seed)
   
 
   # setup log 
-  log_path = f'log/{args.env}/{args.alg}/{args.dir}/{args.seed}/T={args.max_timesteps}'
+  log_path = f'log/{args.env}/{args.alg}/{args.dir}/{args.seed}/T={args.max_timesteps}/rf_num={args.rf_num}/learn_rf={args.learn_rf}/sigma={args.sigma}/euler={euler}'
   summary_writer = SummaryWriter(log_path+"/summary_files")
 
   # set seeds
@@ -66,6 +70,11 @@ if __name__ == "__main__":
   action_dim = env.action_space.shape[0] 
   max_action = float(env.action_space.high[0])
 
+  if args.learn_rf == "False":
+    learn_rf = False
+  else:
+    learn_rf = True
+
   kwargs = {
     "state_dim": state_dim,
     "action_dim": action_dim,
@@ -74,6 +83,8 @@ if __name__ == "__main__":
     "tau": args.tau,
     "hidden_dim": args.hidden_dim,
     "sigma": sigma,
+    "rf_num": args.rf_num,
+    "learn_rf": learn_rf
   }
 
   # Initialize policy

@@ -41,7 +41,7 @@ class Timer:
 		return sps
 
 
-def eval_policy(policy, eval_env, eval_episodes=10):
+def eval_policy(policy, eval_env, eval_episodes=100):
 	"""
 	Eval a policy
 	"""

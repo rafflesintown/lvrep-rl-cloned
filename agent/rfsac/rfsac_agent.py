@@ -194,10 +194,10 @@ class RFQCritic(RLNetwork):
 #currently hardcoding s_dim
 #this is a  V function
 class RFVCritic(RLNetwork):
-    def __init__(self, s_dim = 3, embedding_dim = -1, n_neurons = 256,sigma = 0.05):
+    def __init__(self, s_dim = 3, embedding_dim = -1, rf_num = 256,sigma = 0.0, learn_rf = False):
         super().__init__()
         self.n_layers = 1
-        self.n_neurons = n_neurons
+        self.n_neurons = rf_num
 
         self.sigma = sigma
 
@@ -212,7 +212,7 @@ class RFVCritic(RLNetwork):
             self.embed.bias.requires_grad = False
 
         # fourier_feats1 = nn.Linear(sa_dim, n_neurons)
-        fourier_feats1 = nn.Linear(embedding_dim,n_neurons)
+        fourier_feats1 = nn.Linear(embedding_dim,self.n_neurons)
         # fourier_feats1 = nn.Linear(s_dim,n_neurons)
         if self.sigma > 0:
             init.normal_(fourier_feats1.weight, std = 1./self.sigma)
@@ -221,13 +221,13 @@ class RFVCritic(RLNetwork):
         	init.normal_(fourier_feats1.weight)
         init.uniform_(fourier_feats1.bias, 0,2*np.pi)
         # init.zeros_(fourier_feats.bias)
-        fourier_feats1.weight.requires_grad = False
-        fourier_feats1.bias.requires_grad = False
+        fourier_feats1.weight.requires_grad = learn_rf
+        fourier_feats1.bias.requires_grad = learn_rf
         self.fourier1 = fourier_feats1 #unnormalized, no cosine/sine yet
 
 
 
-        fourier_feats2 = nn.Linear(embedding_dim, n_neurons)
+        fourier_feats2 = nn.Linear(embedding_dim, self.n_neurons)
         # fourier_feats2 = nn.Linear(s_dim,n_neurons)
         if self.sigma > 0:
         	init.normal_(fourier_feats2.weight, std = 1./self.sigma)
@@ -235,18 +235,18 @@ class RFVCritic(RLNetwork):
         else:
         	init.normal_(fourier_feats2.weight)
         init.uniform_(fourier_feats2.bias, 0,2*np.pi)
-        fourier_feats2.weight.requires_grad = False
-        fourier_feats2.bias.requires_grad = False
+        fourier_feats2.weight.requires_grad = learn_rf
+        fourier_feats2.bias.requires_grad = learn_rf
         self.fourier2 = fourier_feats2
 
-        layer1 = nn.Linear( n_neurons, 1) #try default scaling
+        layer1 = nn.Linear( self.n_neurons, 1) #try default scaling
         # init.uniform_(layer1.weight, -3e-3,3e-3) #weight is the only thing we update
         init.zeros_(layer1.bias)
         layer1.bias.requires_grad = False #weight is the only thing we update
         self.output1 = layer1
 
 
-        layer2 = nn.Linear( n_neurons, 1) #try default scaling
+        layer2 = nn.Linear( self.n_neurons, 1) #try default scaling
         # init.uniform_(layer2.weight, -3e-3,3e-3) 
         # init.uniform_(layer2.weight, -3e-4,3e-4)
         init.zeros_(layer2.bias)
@@ -365,7 +365,9 @@ class RFSACAgent(SACAgent):
 			alpha=0.1,
 			auto_entropy_tuning=True,
 			hidden_dim=256,
-			sigma = 0.05
+			sigma = 0.0,
+			rf_num = 256,
+			learn_rf = False,
 			# feature_tau=0.001,
 			# feature_dim=256, # latent feature dim
 			# use_feature_target=True, 
@@ -419,7 +421,7 @@ class RFSACAgent(SACAgent):
 		# 	hidden_depth = 2,
 		# 	).to(device)
 		# self.critic = RFQCritic().to(device)
-		self.critic = RFVCritic(sigma = sigma).to(device)
+		self.critic = RFVCritic(sigma = sigma, rf_num = rf_num, learn_rf = learn_rf).to(device)
 		# self.critic = Critic().to(device)
 		self.critic_target = copy.deepcopy(self.critic)
 		self.critic_optimizer = torch.optim.Adam(

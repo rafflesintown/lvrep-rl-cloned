@@ -4,6 +4,7 @@ from os import path
 from typing import Optional
 
 import numpy as np
+import time
 
 import gym
 from gym import spaces
@@ -92,7 +93,8 @@ class noisyPendulumEnv(gym.Env):
         "render_fps": 30,
     }
 
-    def __init__(self, render_mode: Optional[str] = None, g=10.0,sigma = 0.0,max_episode_steps = 200):
+    def __init__(self, render_mode: Optional[str] = None, g=10.0,sigma = 0.0,
+        max_episode_steps = 200,euler = False):
         self.max_speed = 8
         self.max_torque = 2.0
         self.dt = 0.05
@@ -101,6 +103,7 @@ class noisyPendulumEnv(gym.Env):
         self.l = 1.0
         self.sigma = sigma
         self.max_episode_steps = max_episode_steps
+        self.euler = euler
 
         self.render_mode = render_mode
 
@@ -130,12 +133,14 @@ class noisyPendulumEnv(gym.Env):
         self.last_u = u  # for rendering
         costs = angle_normalize(th) ** 2 + 0.1 * thdot**2 + 0.001 * (u**2)
 
-        newthdot = thdot + (3 * g / (2 * l) * np.sin(th) + 3.0 / (m * l**2) * u) * dt
+        newthdot = thdot + (3 * g / (2 * l) * np.sin(th) + 3.0 / (m * l**2) * u + np.random.normal(scale = self.sigma)) * dt
         newthdot = np.clip(newthdot, -self.max_speed, self.max_speed)
-        newth = th + newthdot * dt
-
+        if self.euler == True:
+            newth = th + thdot * dt
+        else:
+            newth = th + newthdot * dt
         self.state = np.array([newth, newthdot])
-        self.state += np.random.normal(size = (2,), scale = self.sigma)
+        # self.state += np.random.normal(size = (2,), scale = self.sigma)
 
         self.counter += 1
 
@@ -273,6 +278,28 @@ class noisyPendulumEnv(gym.Env):
             return np.transpose(
                 np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
             )
+
+    def visualize(self, init_state, cmd, dt: float =None):
+        """
+        Visualize the movement associated to a sequence of control variables
+        :param cmd: sequence of controls to be applied on the system given as an numpy array
+        :param dt: time step to visualize the movement (default is to use the time step defined in the environment)
+        """
+        if dt is None:
+            dt = self.dt
+        self.render_mode = "human"
+        self.reset(init_state = init_state)
+        print("self.state", self.state)
+        t = 0
+        for ctrl in cmd:
+            ctrl = np.array([ctrl])
+            self.render()
+            time.sleep(dt)
+            self.step(ctrl)
+            print("self.state (time %d)"%t, self.state)
+            t += 1
+        self.render()
+        self.close()
 
     def close(self):
         if self.screen is not None:
