@@ -186,8 +186,10 @@ def bell_core(A, B, J, j, H, P, p, q, R=None):
     """
     if R is None:
         R = torch.zeros(p.shape[0], q.shape[0])
-    K = - torch.solve(R.t() + B.t().mm(J.mm(A)), H)[0]
-    k = - torch.solve((q + B.t().mv(j)).view(-1, 1), H)[0].view(-1)
+    # K = - torch.solve(R.t() + B.t().mm(J.mm(A)), H)[0]
+    K = - torch.linalg.solve(H, R.t() + B.t().mm(J.mm(A)))
+    # k = - torch.solve((q + B.t().mv(j)).view(-1, 1), H)[0].view(-1)
+    k = - torch.linalg.solve(H, (q + B.t().mv(j)).view(-1, 1)).view(-1)
     next_J = P + A.t().mm(J.mm(A)) + (R + A.t().mm(J.mm(B))).mm(K)
     next_j = p + A.t().mv(j) + A.t().mv(J.mv(B.mv(k))) + R.mv(k)
     rest = 0.5 * (q + B.t().mv(j)).dot(k)

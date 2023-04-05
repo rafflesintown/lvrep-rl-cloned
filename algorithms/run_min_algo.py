@@ -45,9 +45,9 @@ def run_min_algo(env: DiffEnv, max_iter: int = 10, algo: str = 'ddp_linquad_reg'
 
     if past_metrics is None:
         traj, costs = env.forward(cmd, approx=approx)
-        metrics, iteration = collect_info(None, env, cmd, costs, 0, stepsize, algo, 0.), 0
+        metrics, iteration = collect_info(None, env, cmd, costs,0, stepsize, algo, 0.), 0
     else:
-        traj, costs = env.forward(cmd, approx=approx)
+        traj, costs= env.forward(cmd, approx=approx)
         metrics, iteration = past_metrics, past_metrics['iteration'][-1]
     status = check_cvg_status(metrics)
 
@@ -55,6 +55,7 @@ def run_min_algo(env: DiffEnv, max_iter: int = 10, algo: str = 'ddp_linquad_reg'
         start_time = time.time()
         cmd, traj, costs, stepsize = min_step(env, traj, costs, cmd, stepsize,
                                               line_search, algo, handle_bad_dir)
+        # print("these are the costs at iteration %d" %iteration, costs)
         iteration += 1
         time_iter = time.time() - start_time
         metrics = collect_info(metrics, env, cmd, costs, iteration, stepsize, algo, time_iter)
@@ -65,8 +66,8 @@ def run_min_algo(env: DiffEnv, max_iter: int = 10, algo: str = 'ddp_linquad_reg'
     return cmd_opt, optim_aux_vars, metrics
 
 
-def collect_info(metrics: dict, env: DiffEnv, cmd: torch.Tensor, costs: List[torch.Tensor], iteration: int,
-                 stepsize: float, algo: str, time_iter: float) -> dict:
+def collect_info(metrics: dict, env: DiffEnv, cmd: torch.Tensor, costs: List[torch.Tensor], 
+ iteration: int, stepsize: float, algo: str, time_iter: float) -> dict:
     """
     Collect metric on the problem and add it to the current metrics
     :param metrics: metrics of the optimization process computed so far
@@ -81,6 +82,8 @@ def collect_info(metrics: dict, env: DiffEnv, cmd: torch.Tensor, costs: List[tor
     """
     cumul_time = 0. if iteration == 0 else metrics['time'][-1]
     cost = sum(costs) if costs is not None else torch.tensor(float('nan'))
+    # normalized_cost = sum(normalized_costs) if normalized_costs is not None else torch.tensor(float('nan'))
+    print("cost rn", cost)
 
     if algo != 'gd':
         norm_grad_obj = torch.sqrt(sum([cost.grad_ctrl.dot(cost.grad_ctrl) + cost.grad_state.dot(cost.grad_state)

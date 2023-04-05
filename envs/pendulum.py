@@ -1,5 +1,8 @@
+#this is a modified version - zhaolin
+
 import math
 import numpy as np
+import time 
 import torch
 from envs.forward import DiffEnv
 from envs.discretization import euler, runge_kutta4, runge_kutta4_cst_ctrl
@@ -7,54 +10,101 @@ from envs.torch_utils import smooth_relu
 
 
 class Pendulum(DiffEnv):
-    def __init__(self, reg_speed=0.1, reg_ctrl=1e-6, dt=0.05, horizon=40, stay_put_time=None, seed=0):
+    def __init__(self, reg_speed=0.1, reg_ctrl=0.001, dt=0.05, horizon=40, stay_put_time=None, seed=0, 
+        init_state = np.asarray(([math.pi, 0.])), sigma = 0., max_speed = 8., euler = False):
         super(Pendulum, self).__init__()
         # env parameters
         self.horizon, self.dt = horizon, dt
         self.dim_ctrl, self.dim_state = 1, 2
-        self.init_state, self.init_time_iter = torch.tensor(([math.pi, 0.])), 0
+        self.init_time_iter = 0
+        self.init_state= torch.from_numpy(init_state)
+        self.euler = euler
+        self.max_speed = max_speed
         if seed != 0:
             torch.manual_seed(seed)
             self.init_state[0] = self.init_state[0] + 1e0*torch.randn(1)
 
+        #stay put time (?)
+
+        self.stay_put_time = stay_put_time
+        # print("stay ut time", self.stay_put_time)
+
         # cost parameters
         self.reg_speed, self.reg_ctrl = reg_speed, reg_ctrl
-        self.stay_put_time_start_iter = horizon-int(stay_put_time/dt) if stay_put_time is not None else horizon
-
+        # self.stay_put_time_start_iter = horizon-int(stay_put_time/dt) if self.stay_put_time is not None else horizon
+        self.stay_put_time_start_iter = 0 # try start time iter = 0
         # physics parameters
         self.g, self.m, self.l, self.mu = 10, 1., 1., 0.01
 
         # rendering
         self.pole_transform = None
 
-    def dyn(self, state, ctrl):
-        th, thdot = state
-        g, m, l, mu = self.g, self.m, self.l, self.mu
-        dthdot = -g/l * torch.sin(th + math.pi) - mu/(m*l**2) * thdot + 1/(m*l**2) * ctrl
-        dth = thdot.unsqueeze(-1)
-        dt_state = torch.stack((dth, dthdot)).view(-1)
-        return dt_state
+        #Noise
+        self.sigma = sigma
+
+    def angle_normalize(self, th):
+        return((th + np.pi) % (2 * np.pi) - np.pi)
+
+    # def dyn(self, state, ctrl):
+    #     th, thdot = state
+    #     g, m, l, mu = self.g, self.m, self.l, self.mu
+    #     # th_normalized = self.angle_normalize(th)
+    #     noise = np.random.normal(scale = self.sigma)
+    #     dthdot = (3. * g / (2. * l)) * torch.sin(th) + 3.0/(m * l**2) * ctrl + noise
+    #     # dthdot = np.clip(newthdot, -self.max_speed, self.max_speed)
+    #     # dthdot = -g/l * torch.sin(th + math.pi) - mu/(m*l**2) * thdot + 1/(m*l**2) * ctrl
+    #     dth = thdot.unsqueeze(-1)
+    #     dt_state = torch.stack((dth, dthdot)).view(-1)
+    #     return dt_state
 
     def discrete_dyn(self, state, ctrl, time_iter):
-        return euler(self.dyn, state, ctrl, self.dt)
+        # print("state shape", state.shape)
+        th, thdot = state
+        g, m, l, mu = self.g, self.m, self.l, self.mu
+        # th_normalized = self.angle_normalize(th)
+        noise = np.random.normal(scale = self.sigma)
+        # print("this is noise", noise)
+        dthdot = (3. * g / (2. * l)) * torch.sin(th) + 3.0/(m * l**2) * ctrl + noise
+        newthdot = (thdot + dthdot * self.dt) #this is size([1])
+        newthdot = torch.clip(newthdot, -self.max_speed,self.max_speed)
+        # newth = th + newthdot * self.dt
+        if self.euler == True:
+            newth = th + thdot * self.dt #Size([])
+        else:
+            newth = (th + newthdot * self.dt)[0] #b/c newthdot is Size([1])
+        # newth = th + newthdot * self.dt #Size([1])
+        # print("new state", torch.tensor([newth, newthdot[0]]))
+        return torch.stack((newth, newthdot[0])).view(-1)
+        # dthdot = np.clip(newthdot, -self.max_speed, self.max_speed)
+        # new_s[1] = torch.clip(new_s[1], -self.max_speed, self.max_speed)
+        # return euler(self.dyn, state, ctrl, self.dt)
 
     def costs(self, next_state, ctrl, time_iter):
         cost_next_state = self.cost_state(next_state, time_iter)
         return cost_next_state, self.cost_ctrl(ctrl)
 
     def cost_ctrl(self, ctrl):
-        return self.reg_ctrl * ctrl ** 2
+        return self.reg_ctrl * ctrl ** 2  -  (torch.log(2 - ctrl ) +torch.log(2 + ctrl ))
 
     def cost_state(self, state, time_iter):
+        # print("hey start time iter", self.stay_put_time_start_iter)
         if time_iter >= self.stay_put_time_start_iter:
+            # print("i here", time_iter)
+            # cost_state = (self.angle_normalize(state[0])) ** 2 + self.reg_speed * state[1] ** 2
             cost_state = (state[0]) ** 2 + self.reg_speed * state[1] ** 2
         else:
             cost_state = torch.tensor(0.)
         return cost_state
 
+
+
+
+
+
     def reset(self, requires_grad=False):
         self.time_iter = self.init_time_iter
         self.state = self.init_state
+        # print("self.state", self.state)
         self.state.requires_grad = requires_grad
         return self.state
 
@@ -156,6 +206,7 @@ class CartPendulum(DiffEnv):
                                              + smooth_relu(-(self.x_limits[1] - state[0])))
             cost_state = cost_state + cost_barrier
         return cost_state
+
 
     def set_viewer(self):
         from envs import rendering

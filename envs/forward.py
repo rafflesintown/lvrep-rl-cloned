@@ -100,6 +100,9 @@ class DiffEnv:
             state, cost = self.step(cmd[t], approx=approx)
             traj.append(state)
             costs.append(cost)
+            # print("step %d" %t)
+            # print("state rn", state)
+            # print("cost rn", cost)
         return traj, costs
 
     def reset(self, requires_grad=False) -> torch.Tensor:
