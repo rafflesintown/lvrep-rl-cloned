@@ -9,14 +9,19 @@ class PendulumEnv(gym.Env):
 
     metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 30}
 
-    def __init__(self, g=10.0):
+    def __init__(self, g=10.0, return_norm_th = False,sigma = 0.,euler = False):
         self.max_speed = 8
-        self.max_torque = 8.0
-        self.dt = 0.02
+        self.max_torque = 2.0
+        # self.dt = 0.02
+        self.dt = 0.05
         self.g = g
         self.m = 1.0
         self.l = 1.0
         self.viewer = None
+        self.sigma = sigma
+        self.euler = euler
+
+        self.return_norm_th = return_norm_th
 
         high = np.array([np.pi, self.max_speed], dtype=np.float32)
         self.action_space = spaces.Box(
@@ -46,10 +51,13 @@ class PendulumEnv(gym.Env):
         # u = np.clip(u, -self.max_torque, self.max_torque)[0]
         self.last_u = u  # for rendering
         costs = angle_normalize(th) ** 2 + 0.1 * thdot ** 2 + 0.001 * (u ** 2)
-        
-        newthdot = thdot + (3 * g / (2 * l) * np.sin(th) + 3.0 / (m * l ** 2) * u) * dt
-        # newthdot = np.clip(newthdot, -self.max_speed, self.max_speed)
-        newth = th + newthdot * dt
+        noise = np.random.normal(scale = self.sigma)
+        newthdot = thdot + (3 * g / (2 * l) * np.sin(th) + 3.0 / (m * l ** 2) * u + noise) * dt
+        newthdot = np.clip(newthdot, -self.max_speed, self.max_speed)
+        if self.euler == True:
+            newth = th + thdot * dt
+        else:
+            newth = th + newthdot * dt
         # if newth >= np.pi:
         #     newth -= 2*np.pi
         # if newth <= -np.pi:
@@ -73,7 +81,10 @@ class PendulumEnv(gym.Env):
 
     def _get_obs(self):
         theta, thetadot = self.state
-        return np.array([theta,thetadot])
+        if self.return_norm_th == True:
+            return np.array([theta,angle_normalize(theta) ,thetadot])
+        else:
+            return np.array([theta,thetadot])
 
     def render(self, mode="human"):
         if self.viewer is None:

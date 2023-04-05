@@ -103,10 +103,8 @@ def Eig_loss(net):
     loss = c[mask].sum()
     return loss
 
-def train(env_name,train_steps = 30000,suffix="",all_loss=0,\
-            encode_dim = 20,layer_depth=3,e_loss=1,gamma=0.5,Ktrain_samples=50000, dt = 0.05, 
-            seed = 0, return_norm_th = False,sigma = 0.0, euler = False):
-    np.random.seed(seed)
+def train(env_name,train_steps = 100000,suffix="",all_loss=0,\
+            encode_dim = 12,layer_depth=3,e_loss=1,gamma=0.5,Ktrain_samples=50000,dt = None):
     # Ktrain_samples = 1000
     # Ktest_samples = 1000
     Ktrain_samples = Ktrain_samples
@@ -116,7 +114,7 @@ def train(env_name,train_steps = 30000,suffix="",all_loss=0,\
     res = 1
     normal = 1
     #data prepare
-    data_collect = data_collecter(env_name, dt = dt, seed = seed, return_norm_th = return_norm_th,sigma = sigma, euler = euler)
+    data_collect = data_collecter(env_name)
     u_dim = data_collect.udim
     Ktest_data = data_collect.collect_koopman_data(Ktest_samples,Ksteps,mode="eval")
     Ktest_samples = Ktest_data.shape[1]
@@ -147,8 +145,7 @@ def train(env_name,train_steps = 30000,suffix="",all_loss=0,\
     eval_step = 1000
     best_loss = 1000.0
     best_state_dict = {}
-    logdir = "../Data/"+suffix+"/KoopmanU_"+env_name+ "layer{}_edim{}_eloss{}_gamma{}_aloss{}_samples{}_dt{}_seed{}_return_norm_th={}_sigma={}_euler={}".format(layer_depth,encode_dim,e_loss,gamma,
-        all_loss,Ktrain_samples,dt,seed, return_norm_th,sigma,euler)
+    logdir = "../Data/"+suffix+"/KoopmanU_"+env_name+"layer{}_edim{}_eloss{}_gamma{}_aloss{}_samples{}_dt{}".format(layer_depth,encode_dim,e_loss,gamma,all_loss,Ktrain_samples,dt)
     if not os.path.exists( "../Data/"+suffix):
         os.makedirs( "../Data/"+suffix)
     if not os.path.exists(logdir):
@@ -199,39 +196,21 @@ def train(env_name,train_steps = 30000,suffix="",all_loss=0,\
     
 
 def main():
-    if args.return_norm_th == "True":
-        return_norm_th = True
-    else:
-        return_norm_th = False
-
-    euler = True if args.euler == "True" else False
-
     train(args.env,suffix=args.suffix,all_loss=args.all_loss,\
         encode_dim=args.encode_dim,layer_depth=args.layer_depth,\
             e_loss=args.e_loss,gamma=args.gamma,\
-                Ktrain_samples=args.K_train_samples, train_steps =args.train_steps, dt = args.dt, 
-                seed = args.seed,return_norm_th = return_norm_th, euler = euler,sigma=args.sigma)
+                Ktrain_samples=args.K_train_samples, dt = args.dt)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env",type=str,default="Pendulum-v1")
-    parser.add_argument("--suffix",type=str,default="Pendulum-v1")
+    parser.add_argument("--env",type=str,default="DampingPendulum")
+    parser.add_argument("--suffix",type=str,default="5_2")
     parser.add_argument("--all_loss",type=int,default=1)
-    # parser.add_argument("--K_train_samples",type=int,default=50000)
-    parser.add_argument("--K_train_samples",type=int,default=100000)
+    parser.add_argument("--K_train_samples",type=int,default=50000)
     parser.add_argument("--e_loss",type=int,default=0)
     parser.add_argument("--gamma",type=float,default=0.8)
     parser.add_argument("--encode_dim",type=int,default=20)
     parser.add_argument("--layer_depth",type=int,default=3)
-    parser.add_argument("--train_steps", type=int, default=30000)
-    parser.add_argument("--dt", type=float, default=0.05)
-    parser.add_argument("--seed", type = int, default = 0)
-    parser.add_argument("--return_norm_th", default = "False")
-    parser.add_argument("--sigma", type = float, default = 0.0)
-    parser.add_argument("--euler", default = "False") 
+    parser.add_argument("--dt", type = float, default = 0.05)
     args = parser.parse_args()
-    t1 = time.time()
     main()
-    t2 = time.time()
-    print(f"this training took {t2-t1} seconds")
-

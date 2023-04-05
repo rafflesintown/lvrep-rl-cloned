@@ -8,6 +8,10 @@ from rbf import rbf
 from gym import spaces
 import sys
 sys.path.append("../franka")
+sys.path.append("../gym_env")
+
+from our_env.noisy_pend import noisyPendulumEnv
+from pendulum import PendulumEnv
 #data collect
 
 class RBFLiftFunc():
@@ -223,10 +227,10 @@ def FrankaObs(o):
     return np.concatenate((o[:3],o[7:]),axis=0)
 
 class data_collecter():
-    def __init__(self,env_name) -> None:
+    def __init__(self,env_name, dt = 0.02, seed = 0, return_norm_th = False, sigma = 0.0, euler = False) -> None:
         self.env_name = env_name
-        np.random.seed(2022)
-        random.seed(2022)
+        np.random.seed(seed)
+        random.seed(seed)
         if self.env_name.startswith("DampingPendulum"):
             self.env = SinglePendulum()
             self.Nstates = self.env.Nstates
@@ -260,6 +264,19 @@ class data_collecter():
             self.uval = 20
             self.udim = 7
             self.reset_joint_state = np.array(self.env.reset_joint_state)
+        elif self.env_name.endswith("Pendulum-v1"):
+            # self.env = noisyPendulumEnv(dt = dt)
+            self.env = PendulumEnv(return_norm_th = return_norm_th, sigma = sigma, euler = euler)
+            self.env.seed(seed)
+            print("seed", seed)
+            self.udim = self.env.action_space.shape[0]
+            # self.Nstates = self.env.observation_space.shape[0]
+            if return_norm_th == True:
+                self.Nstates = 3 #[th, norm(th), thdot]
+            else:
+                self.Nstates = 2 # [th,thdot]
+            self.umin = self.env.action_space.low
+            self.umax = self.env.action_space.high
         else:
             self.env = gym.make(env_name)
             self.env.seed(2022)
@@ -277,9 +294,11 @@ class data_collecter():
             th0 = random.uniform(-2*np.pi, 2*np.pi)
             dth0 = random.uniform(-8, 8)
             s0 = np.array([th0, dth0])
-        elif self.env_name.startswith("Pendulum"):
+        elif self.env_name.startswith("Pendulum"): #don't think this is ever called
             th0 = random.uniform(-2*np.pi, 2*np.pi)
-            dth0 = random.uniform(-8, 8)
+            # th0 = random.uniform(-np.pi,np.pi)
+            # dth0 = random.uniform(-8, 8)
+            dth0 = random.uniform(-8,8)
             s0 = [th0, dth0]  
         elif self.env_name.startswith("CartPole"):
             x0 = random.uniform(-4,4)
@@ -338,7 +357,18 @@ class data_collecter():
                 for j in range(traj_num):
                     train_data_now[:,j,:] = traj_data[j*(steps+1):(j+1)*(steps+1),:17]
                 train_data.append(train_data_now)
-            train_data = np.concatenate(train_data,axis=1)            
+            train_data = np.concatenate(train_data,axis=1)   
+        # elif self.env_name.startswith("Pendulum-v1"):
+        #     for traj_i in range(traj_num):
+        #         s0 = self.env.reset_koopman()
+        #         # s0 = self.random_state()
+        #         u10 = np.random.uniform(self.umin, self.umax)
+        #         # self.env.reset_state(s0)
+        #         train_data[0,traj_i,:]=np.concatenate([u10.reshape(-1),s0.reshape(-1)],axis=0).reshape(-1)
+        #         for i in range(1,steps+1):
+        #             s0,r,done,_ = self.env.step_koopman(u10)
+        #             u10 = np.random.uniform(self.umin, self.umax)
+        #             train_data[i,traj_i,:]=np.concatenate([u10.reshape(-1),s0.reshape(-1)],axis=0).reshape(-1)                    
         else:
             for traj_i in range(traj_num):
                 s0 = self.env.reset()
