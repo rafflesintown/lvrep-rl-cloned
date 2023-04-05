@@ -1,3 +1,8 @@
+# CDC Implementation 
+
+To replicate our implemetation of iLQR for the CDC 2023 submission, please use test_main.py in this branch to train and evaluate iLQR on the pendulum swingup problem. For more about this code, please refer to the following details from the original authors of the code: https://github.com/vroulet/ilqc.
+
+
 # Iterative Linear Quadratic Control Toolbox
 The goal of this toolbox is to analyze empirically the optimization performance of several algorithms for nonlinear
  control from an optimization viewpoint on several synthetic benchmarks.
