@@ -2,6 +2,8 @@
 
 To replicate our implementation of Deep Koopman based control for the CDC 2023 paper, please use the Learn_Koopman_with_KlinearEig.py file in the train folder of this branch to train a new Koopman dynamics model. For evaluation, please use the og_eval_mpc.py file in the control folder of this branch. For general details of how to use the code in this branch, please refer to the following details from the original authors of this code: https://github.com/HaojieSHI98/DeepKoopmanWithControl.
 
+Note: the do-mpc package is needed for evaluating the mpc version of the code. See installation instructions here: https://www.do-mpc.com/en/latest/installation.html.
+
 # DeepKoopmanWithControl
 Deep Koopman Operator with Control for Nonlinear Systems
 
