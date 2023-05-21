@@ -279,11 +279,12 @@ class noisyPendulumEnv(gym.Env):
                 np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
             )
 
-    def visualize(self, init_state, cmd, dt: float =None):
+    def visualize(self, init_state, cmd, seed = None, dt: float =None):
         """
         Visualize the movement associated to a sequence of control variables
         :param cmd: sequence of controls to be applied on the system given as an numpy array
         :param dt: time step to visualize the movement (default is to use the time step defined in the environment)
+        seed: random seed for noise in env (if any)
         """
         if dt is None:
             dt = self.dt
@@ -291,11 +292,13 @@ class noisyPendulumEnv(gym.Env):
         self.reset(init_state = init_state)
         print("self.state", self.state)
         t = 0
+        np.random.seed(seed)
         for ctrl in cmd:
             ctrl = np.array([ctrl])
             self.render()
             time.sleep(dt)
             self.step(ctrl)
+            print("self.action (time %d)"%t, ctrl)
             print("self.state (time %d)"%t, self.state)
             t += 1
         self.render()

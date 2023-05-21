@@ -38,10 +38,12 @@ if __name__ == "__main__":
   parser.add_argument("--rf_num", default = 256, type = int)
   parser.add_argument("--learn_rf", default = "False") #make this a string (strange Python issue...) 
   parser.add_argument("--euler", default = "False") #True if euler discretization to be used; otherwise use default OpenAI gym discretization
+  parser.add_argument("--use_nystrom", default = "True")
   args = parser.parse_args()
 
   sigma = args.sigma
   euler = True if args.euler == "True" else False
+  use_nystrom = True if args.use_nystrom == "True" else False
 
   env = gym.make(args.env)
   eval_env = gym.make(args.env)
@@ -54,7 +56,7 @@ if __name__ == "__main__":
   
 
   # setup log 
-  log_path = f'log/{args.env}/{args.alg}/{args.dir}/{args.seed}/T={args.max_timesteps}/rf_num={args.rf_num}/learn_rf={args.learn_rf}/sigma={args.sigma}/euler={euler}'
+  log_path = f'log/{args.env}/{args.alg}/{args.dir}/{args.seed}/T={args.max_timesteps}/rf_num={args.rf_num}/learn_rf={args.learn_rf}/sigma={args.sigma}/euler={euler}/use_nystrom={use_nystrom}'
   summary_writer = SummaryWriter(log_path+"/summary_files")
 
   # set seeds
@@ -84,7 +86,8 @@ if __name__ == "__main__":
     "hidden_dim": args.hidden_dim,
     "sigma": sigma,
     "rf_num": args.rf_num,
-    "learn_rf": learn_rf
+    "learn_rf": learn_rf,
+    "use_nystrom": use_nystrom
   }
 
   # Initialize policy
@@ -152,12 +155,17 @@ if __name__ == "__main__":
     episode_reward += reward
     
     # Train agent after collecting sufficient data
+    if use_nystrom == True and t == args.start_timesteps: #init nystrom at the step training begins
+      kwargs["replay_buffer"] = replay_buffer
+      agent = rfsac_agent.RFSACAgent(**kwargs) #reinit agent is not ideal, temp fix
+      # agent.critic.init_using_samples(replay_buffer, n_samples = args.rf_num)
+
     if t >= args.start_timesteps:
       info = agent.train(replay_buffer, batch_size=args.batch_size)
 
     if done: 
       # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
-      print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
+      print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f} use_nystrom:{use_nystrom}")
       # Reset environment
       state, done = env.reset(), False
       # prev_state = np.copy(state)
