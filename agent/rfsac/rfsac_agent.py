@@ -302,114 +302,52 @@ class nystromVCritic(RLNetwork):
         self.n_neurons = feat_num
 
         self.sigma = sigma
-        # if buffer is None:
-        #     pass
-        # else:
-        #     self.init_using_samples(buffer, feat_num)
 
         s_high = -s_low
 
         #create nystrom feats 
         self.nystrom_samples1 = np.random.uniform(s_low,s_high,size = (feat_num, s_dim)) 
-        self.nystrom_samples1 = torch.from_numpy(self.nystrom_samples1)
         self.nystrom_samples2 = np.random.uniform(s_low,s_high,size = (feat_num, s_dim)) 
-        self.nystrom_samples2 = torch.from_numpy(self.nystrom_samples2)
-        # self.nystrom_samples2 = torch.random.uniform(s_low,s_high,size = (feat_num,s_dim))
         if sigma > 0.0:
-            self.kernel = lambda z: torch.exp(-torch.linalg.norm(z)**2/(2.* sigma**2))
+            self.kernel = lambda z: np.exp(-np.linalg.norm(z)**2/(2.* sigma**2))
         else:
-            self.kernel = lambda z: torch.exp(-torch.linalg.norm(z)**2/(2.))
-        self.K_m1 = self.make_K(self.nystrom_samples1,self.kernel)
-        # self.K_m2 = self.make_K(self.nystrom_samples2,self.kernel)
-        [eig_vals1,S1] = torch.linalg.eig(self.K_m1)
-        # print("eig vals", eig_vals1)
-        self.eig_vals1 = eig_vals1.float()
-        self.S1 = S1.float()
-        # [eig_vals2,S2] = torch.linalg.eig(self.K_m2)
-        # self.eig_vals2 = eig_vals2.float()
-        # self.S2 = S2.float()
+            self.kernel = lambda z: np.exp(-np.linalg.norm(z)**2/(2.))
+        K_m1 = self.make_K(self.nystrom_samples1,self.kernel)
+        [eig_vals1,S1] = np.linalg.eig(K_m1) #numpy linalg eig doesn't produce negative eigenvalues... (unlike torch)
+        self.eig_vals1= torch.from_numpy(eig_vals1).float()
+        self.S1 = torch.from_numpy(S1).float()
+        self.nystrom_samples1 = torch.from_numpy(self.nystrom_samples1)
 
         layer1 = nn.Linear( self.n_neurons, 1) #try default scaling
-        # init.uniform_(layer1.weight, -3e-3,3e-3) #weight is the only thing we update
         init.zeros_(layer1.bias)
         layer1.bias.requires_grad = False #weight is the only thing we update
         self.output1 = layer1
 
 
         layer2 = nn.Linear( self.n_neurons, 1) #try default scaling
-        # init.uniform_(layer2.weight, -3e-3,3e-3) 
-        # init.uniform_(layer2.weight, -3e-4,3e-4)
         init.zeros_(layer2.bias)
-        # print(layer2.weight.dtype, "weight dtype")
         layer2.bias.requires_grad = False #weight is the only thing we update
         self.output2= layer2
 
-    # def init_using_samples(self, buffer, n_samples):
-    #     #create nystrom feats 
-    #     self.nystrom_samples1 = (buffer.sample(n_samples)).state
-    #     print("nystrom samples", self.nystrom_samples1)
-    #     if self.sigma > 0.0:
-    #         self.kernel = lambda z: torch.exp(-torch.linalg.norm(z)**2/(2.* self.sigma**2))
-    #     else:
-    #         self.kernel = lambda z: torch.exp(-torch.linalg.norm(z)**2/(2.))
-    #     self.K_m1 = self.make_K(self.nystrom_samples1,self.kernel)
-    #     [eig_vals1,S1] = torch.linalg.eig(self.K_m1)
-    #     print("eig vals", eig_vals1)
-    #     self.eig_vals1 = eig_vals1.float()
-    #     self.S1 = S1.float()  
+
 
 
 
     def make_K(self, samples,kernel):
         m,d = samples.shape
-        K_m = torch.empty((m,m))
-        for i in torch.arange(m):
-            for j in torch.arange(m):
+        K_m = np.empty((m,m))
+        for i in np.arange(m):
+            for j in np.arange(m):
                 K_m[i,j] = kernel(samples[i,:] - samples[j,:])
         return K_m
 
 
     def forward(self, states: torch.Tensor):
-        # print("x initial norm",torch.linalg.norm(x))
-        # x = torch.cat([states,actions],axis = -1)
-        # x = F.batch_norm(x) #perform batch normalization (or is dbn better?)
-        # x = (x - torch.mean(x, dim=0))/torch.std(x, dim=0) #normalization
-        # x = self.bn(x)
-        # x = self.embed(x) #use an embedding layer
-        # print("x embedding norm", torch.linalg.norm(x))
-        # x = F.relu(x)
-        # print(states.shape, "shape1")
-        # print("self sigma forward", self.sigma)
         x1 = self.nystrom_samples1.unsqueeze(0) - states.unsqueeze(1)
-        # print(states.shape,"shape2")
         K_x1 = torch.exp(-torch.linalg.norm(x1,axis = 2)**2/2).float()
-        # print("K_x1 nan?", torch.isnan(K_x1).any())
-        # print("S1 nan", torch.isnan(self.S1).any())
-        # print("eigvals nan", torch.isnan(self.eig_vals1**(-0.5)).any())
-        # phi_all1 = K_x1 @ (self.S1).T
-        # print(phi_all1.shape, "phi_all partial shape")
         phi_all1 = (K_x1 @ (self.S1)) @ torch.diag(self.eig_vals1**(-0.5))
-        # print("phi_all norm", torch.linalg.norm(phi_all1, axis = 1))
-        phi_all1 = phi_all1 * self.n_neurons
-        # x2 = self.nystrom_samples2.unsqueeze(0) - states.unsqueeze(1)
-        # phi_all2 = torch.exp(-torch.linalg.norm(x2,axis = 2)**2/2)
-        # phi_all2 = phi_all2 * self.n_neurons * 3.
-        # print("phi_all norm", torch.linalg.norm(phi_all1,axis=1))
-        # phi_all = phi_all * np.sqrt(self.n_neurons) 
-        # phi_all = torch.empty((len(states), self.n_neurons))
-        # for i in range(len(states)):
-        #     x = states[i,:]
-        #     Kx = map(self.kernel, x - self.nystrom_samples)
-        #     Kx =  torch.tensor(list(Kx)).float()
-        #     phi_x = torch.diag(self.eig_vals**(-0.5)) @ ((self.S).T @Kx)
-        #     phi_all[i,:] = phi_x
-        # print("phi_all shape", phi_all.shape)
+        phi_all1 = phi_all1 * self.n_neurons * 5
         phi_all1 = phi_all1.to(torch.float32)
-        # phi_all2 = phi_all2.to(torch.float32)
-        # print(phi_all.dtype, "phi all dtype")
-
-        # x = torch.relu(x)
-        # return self.output1(phi_all1), self.output2(phi_all2)
         return self.output1(phi_all1), self.output2(phi_all1)
 
 

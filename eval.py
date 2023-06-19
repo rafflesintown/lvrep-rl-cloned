@@ -28,9 +28,9 @@ def main(env,log_path,agent,rf_num, learn_rf, max_steps = 200, tr_seed = 0, true
   n_init_states = 100
   low_arr =  [-np.pi,-1.]
   high_arr = [np.pi, 1.]
-  # init_states = np.random.uniform(low = low_arr, high = high_arr, size = (n_init_states,true_state_dim))
-  n_init_states = 1
-  init_states = [np.array([np.pi,0.0])]
+  init_states = np.random.uniform(low = low_arr, high = high_arr, size = (n_init_states,true_state_dim))
+  # n_init_states = 1
+  # init_states = [np.array([2,0.0])]
   all_rewards = np.empty(n_init_states)
   u_list = np.empty(max_steps)
   obs_dim  = env.observation_space.shape[0]
@@ -41,27 +41,28 @@ def main(env,log_path,agent,rf_num, learn_rf, max_steps = 200, tr_seed = 0, true
 
   for i in np.arange(n_init_states):
     env_seed = 100 #seed for noise
+    # nv_seed = 100 #seed for noise
     init_state = init_states[i]
     state = env.reset(init_state = init_state)
     eps_reward = 0
-    np.random.seed(env_seed)
+    # np.random.seed(env_seed)
     for t in range(max_steps):
       # print("current state", state)
-      print("time %d" %t)
-      print("previous state", state)
+      # print("time %d" %t)
+      # print("previous state", state)
       action = agent.select_action(np.array(state))
       if save_traj == True:
         all_traj[i,t,:obs_dim] = state
         all_traj[i,t, obs_dim:] = action
-      print("previous action", action)
+      # print("previous action", action)
       # print("current action", action)
       state,reward,done, _ = env.step(action)
-      print("current state", state)
-      print("current reward", reward)
+      # print("current state", state)
+      # print("current reward", reward)
       eps_reward += reward
       u_list[t] = action
     all_rewards[i] = eps_reward
-    env.visualize(init_state = init_states[i], cmd = u_list, seed = env_seed) 
+    # env.visualize(init_state = init_states[i], cmd = u_list, seed = env_seed) 
 
     # print("eval eps reward for init state: ", init_state,  ": ", eps_reward  )
   
